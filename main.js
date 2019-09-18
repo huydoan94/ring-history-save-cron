@@ -459,9 +459,12 @@ class SaveHistoryJob {
         traversedEventIDs.push(d.id);
       }
     });
-    const lastestEvent = moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))
-      ? sorted[0]
-      : oldMeta.lastestEvent;
+    let lastestEvent = {};
+    if (!isEmpty(sorted)) {
+      lastestEvent = moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))
+        ? sorted[0]
+        : oldMeta.lastestEvent;
+    }
     return {
       lastestEvent,
       lastestEventTime: lastestEvent.created_at,
@@ -504,7 +507,7 @@ class SaveHistoryJob {
         this.logger(`Job run SUCCESS at ${moment().format('l LT')}`);
         isCronRunning = false;
       } catch (e) {
-        this.logger(`Job run FAIL at ${moment().format('l LT')} --- ${e}`);
+        this.logger(`Job run FAIL at ${moment().format('l LT')} --- ${e.stack}`);
         isCronRunning = false;
       }
     });
