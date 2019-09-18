@@ -292,7 +292,7 @@ class SaveHistoryJob {
   }) {
     return new Promise((resolve, reject) => {
       const extension = videoStreamByteUrl.match(/\.[0-9a-z]+?(?=\?)/i)[0];
-      const fileName = `${moment(createdAt).format('MMM-DD-YYYY_HH-mm-ss')}_${type}${extension}`;
+      const fileName = `${moment(createdAt).format('YYYY-MM-DD_HH-mm-ss')}_${type}${extension}`;
       const dest = `${dir}/${fileName}`;
 
       if (fs.existsSync(dest)) {
