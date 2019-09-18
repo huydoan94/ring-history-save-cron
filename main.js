@@ -307,12 +307,19 @@ class SaveHistoryJob {
         method: 'GET',
         responseType: 'stream',
       }).then((response) => {
-        let timeout = setTimeout(() => reject(new Error(`Timeout on ${videoStreamByteUrl}`)), 5000);
+        let timeout;
         const file = fs.createWriteStream(dest, { flag: 'w' });
+        const refreshTimeout = () => {
+          if (timeout !== undefined) clearTimeout(timeout);
+          timeout = setTimeout(() => {
+            fs.unlink(dest);
+            reject(new Error(`Timeout on ${videoStreamByteUrl}`));
+          }, 5000);
+        };
+        refreshTimeout();
         response.data.pipe(file);
         response.data.on('data', () => {
-          clearTimeout(timeout);
-          timeout = setTimeout(() => reject(new Error(`Timeout on ${videoStreamByteUrl}`)), 5000);
+          refreshTimeout();
         });
         response.data.on('end', () => {
           this.logger(`Save file ${fileName} SUCCESSFUL`);
@@ -461,7 +468,7 @@ class SaveHistoryJob {
 
   async runCron() {
     let isCronRunning = false;
-    return cron.schedule('5 * * * * *', async () => {
+    return cron.schedule('0 * * * * *', async () => {
       if (isCronRunning) {
         this.logger(`Skip running job at ${moment().format('l LT')}`);
         return;
