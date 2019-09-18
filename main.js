@@ -259,6 +259,7 @@ class SaveHistoryJob {
   }
 
   async completeDownloadPool(downloadPools, remain = 10) {
+    this.logger('Updating download pool');
     return promiseMap(downloadPools, async (p) => {
       if (p.isFailed || p.isReady) return p;
 
@@ -502,7 +503,7 @@ class SaveHistoryJob {
 (async () => {
   const usernameParam = process.argv.indexOf('--username');
   const passwordParam = process.argv.indexOf('--password');
-  if (isEmpty(usernameParam) || isEmpty(passwordParam)) {
+  if (usernameParam === -1 || passwordParam === -1) {
     process.exit(1);
     return;
   }
@@ -510,14 +511,16 @@ class SaveHistoryJob {
   password = process.argv[passwordParam + 1];
 
   const logFile = fs.createWriteStream('./output.log', { flags: 'a' });
+  const procStdOut = process.stdout;
   console.log = (message) => {
     logFile.write(`${util.format(message)}\n`);
-    process.stdout.write(`${util.format(message)}\n`);
+    procStdOut.write(`${util.format(message)}\n`);
   };
 
+  const job = new SaveHistoryJob();
   const isCron = process.argv.indexOf('--cron') !== -1;
   if (isCron) {
-    new SaveHistoryJob().runCron();
+    job.runCron();
     return;
   }
 
@@ -525,7 +528,7 @@ class SaveHistoryJob {
   const toParam = process.argv.indexOf('--to');
   const from = fromParam !== -1 ? process.argv[fromParam + 1] : undefined;
   const to = toParam !== -1 ? process.argv[toParam + 1] : undefined;
-  await new SaveHistoryJob().run(from, to);
+  await job.run(from, to);
   process.exit();
 })();
 
