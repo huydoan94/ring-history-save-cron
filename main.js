@@ -507,7 +507,7 @@ class SaveHistoryJob {
         this.logger(`Job run SUCCESS at ${moment().format('l LT')}`);
         isCronRunning = false;
       } catch (e) {
-        this.logger(`Job run FAIL at ${moment().format('l LT')} --- ${e.stack}`);
+        this.logger(`Job run FAIL at ${moment().format('l LT')} --- ${e}`);
         isCronRunning = false;
       }
     });
