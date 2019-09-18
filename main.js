@@ -458,9 +458,12 @@ class SaveHistoryJob {
         traversedEventIDs.push(d.id);
       }
     });
+    const lastestEvent = moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))
+      ? sorted[0]
+      : oldMeta.lastestEvent;
     return {
-      lastestEvent: sorted[0],
-      lastestEventTime: sorted[0].created_at,
+      lastestEvent,
+      lastestEventTime: lastestEvent.created_at,
       failedEvents: newFailedEvents,
       traversedEventIds: traversedEventIDs,
     };
