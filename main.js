@@ -338,9 +338,10 @@ class SaveHistoryJob {
       + `&api_version=${API_VERSION}&auth_token=${await this.getSession()}`;
       const videoStreamByteUrl = await this.getVideoStreamByteUrl(downloadUrl);
       return {
+        ...h,
         id: h.id,
-        createdAt: h.created_at || h.createdAt,
-        type: h.kind || h.type,
+        createdAt: h.created_at,
+        type: h.kind,
         downloadUrl,
         videoStreamByteUrl,
         isReady: !isEmpty(videoStreamByteUrl),
@@ -377,7 +378,7 @@ class SaveHistoryJob {
   }
 
   async run(from, to) {
-    this.logger(`Running manually at ${moment().format('l LT')}`);
+    this.logger(`Running at ${moment().format('l LT')}`);
     const parsedFrom = isNil(from) || !moment(from).isValid() ? null : moment(from);
     try {
       await this.login();
@@ -385,7 +386,7 @@ class SaveHistoryJob {
       const result = await this.downloadHistoryVideos(
         await this.getHistory(parsedFrom, moment(to)),
       );
-      this.logger(`Finished manual at ${moment().format('l LT')}`);
+      this.logger(`Finished at ${moment().format('l LT')}`);
       return result;
     } catch (err) {
       this.logger(`Run FAILED at ${moment().format('l LT')} --- ${err}`);
@@ -416,7 +417,7 @@ class SaveHistoryJob {
 
   async writeMeta(data) {
     return new Promise((resolve, reject) => {
-      fs.writeFile('./.meta', JSONBigInt.stringify(data), (err) => {
+      fs.writeFile('./.meta', JSONBigInt.stringify(data, null, 2), (err) => {
         if (err) {
           reject(err);
           return;
@@ -472,24 +473,23 @@ class SaveHistoryJob {
         if (isEmpty(meta)) {
           const result = await this.run(moment().startOf('day'));
           meta = this.createMetaData(meta, result);
-          return;
-        }
+        } else {
+          let retryFailedEvents = [];
+          if (!isEmpty(meta.failedEvents)) {
+            retryFailedEvents = await this.downloadHistoryVideos(meta.failedEvents);
+          }
 
-        let retryFailedEvents = [];
-        if (!isEmpty(meta.failedEvents)) {
-          retryFailedEvents = await this.downloadHistoryVideos(meta.failedEvents);
-        }
+          let newEvents = [];
+          const lastestEvent = (await this.getLimitHistory(undefined, 1))[0];
+          if (lastestEvent.created_at !== meta.lastestEventTime) {
+            newEvents = await this.downloadHistoryVideos(
+              await this.getHistory(meta.lastestEventTime),
+            );
+          }
 
-        let newEvents = [];
-        const lastestEvent = (await this.getLimitHistory(undefined, 1))[0];
-        if (lastestEvent.id !== meta.lastestEvent.id) {
-          newEvents = await this.downloadHistoryVideos(
-            await this.getHistory(meta.lastestEventTime),
-          );
+          meta = this.createMetaData(meta, [...retryFailedEvents, ...newEvents]);
         }
-
-        const newMeta = this.createMetaData(meta, [...retryFailedEvents, ...newEvents]);
-        await this.writeMeta(newMeta);
+        await this.writeMeta(meta);
         this.logger(`Job run SUCCESS at ${moment().format('l LT')}`);
         isCronRunning = false;
       } catch (e) {
