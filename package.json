@@ -1,0 +1,34 @@
+{
+  "name": "ring-history-save-cron",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon main.js --from 18-09-2019"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.19.0",
+    "express": "^4.17.1",
+    "fs": "0.0.1-security",
+    "json-bigint": "^0.3.0",
+    "lodash": "^4.17.15",
+    "moment": "^2.24.0",
+    "node-cron": "^2.0.3",
+    "ring-api": "^3.0.7"
+  },
+  "devDependencies": {
+    "eslint": "^5.5.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-config-react-app": "^2.1.0",
+    "eslint-loader": "^2.1.0",
+    "eslint-plugin-flowtype": "^2.50.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jsx-a11y": "^6.1.1",
+    "eslint-plugin-react": "^7.11.1",
+    "eslint-watch": "^4.0.2"
+  }
+}
