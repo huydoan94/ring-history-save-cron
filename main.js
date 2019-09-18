@@ -218,6 +218,7 @@ class SaveHistoryJob {
       || moment(totalEvents[totalEvents.length - 1].created_at).isAfter(moment(from))
     ) {
       const historyEvents = await this.getLimitHistory(earliestEventId);
+      if (isEmpty(historyEvents)) break;
       if (earliestEventId === historyEvents[historyEvents.length - 1].id) break;
       if (moment(historyEvents[historyEvents.length - 1].created_at).isBefore(moment(from))) {
         const evts = filter(historyEvents, e => moment(e.created_at).isAfter(moment(from)));
@@ -312,7 +313,7 @@ class SaveHistoryJob {
         const refreshTimeout = () => {
           if (timeout !== undefined) clearTimeout(timeout);
           timeout = setTimeout(() => {
-            fs.unlink(dest);
+            fs.unlink(dest, () => {});
             reject(new Error(`Timeout on ${videoStreamByteUrl}`));
           }, 5000);
         };
@@ -326,7 +327,7 @@ class SaveHistoryJob {
           file.close(resolve);
         });
         response.data.on('error', (err) => {
-          fs.unlink(dest);
+          fs.unlink(dest, () => {});
           this.logger(`Save file ${fileName} FAIL`);
           reject(err);
         });
