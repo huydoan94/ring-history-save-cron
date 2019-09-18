@@ -480,7 +480,7 @@ class SaveHistoryJob {
       isCronRunning = true;
       try {
         let meta = await this.readMeta();
-        if (isEmpty(meta)) {
+        if (isEmpty(meta) || isEmpty(meta.lastestEventTime)) {
           const result = await this.run(moment().startOf('day'));
           meta = this.createMetaData(meta, result);
         } else {
