@@ -409,8 +409,8 @@ class SaveHistoryJob {
 
   async run(from, to) {
     this.logger(`Running at ${moment().format('l LT')}`);
-    const parsedFrom = isNil(from) || !moment(from).isValid() ? null : moment(from);
-    const parsedTo = isNil(to) || !moment(to).isValid() ? null : moment(to).endOf('day');
+    const parsedFrom = isNil(from) || !moment(from).isValid() ? undefined : moment(from);
+    const parsedTo = isNil(to) || !moment(to).isValid() ? undefined : moment(to).endOf('day').format();
     try {
       await this.login();
       await this.getSession();
@@ -582,4 +582,4 @@ class SaveHistoryJob {
   process.exit();
 })();
 
-express().listen(65520);
+express().listen(process.env.PORT || 8080);
