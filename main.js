@@ -281,11 +281,11 @@ class SaveHistoryJob {
               this.logger(`Deleted file ${fileName} in ${dirPath}`);
             }
           });
-          this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
+          this.logger(`Save file ${fileName} to ${dirPath} FAIL --- ${err}`);
           reject(err);
         });
       }).catch((err) => {
-        this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
+        this.logger(`Save file ${fileName} to ${dirPath} FAIL --- ${err}`);
         reject(err);
       });
     });
