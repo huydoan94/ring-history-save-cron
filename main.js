@@ -15,6 +15,7 @@ const forEach = require('lodash/forEach');
 const uniq = require('lodash/uniq');
 const isNil = require('lodash/isNil');
 const isEmpty = require('lodash/isEmpty');
+const last = require('lodash/last');
 
 let username;
 let password;
@@ -210,23 +211,23 @@ class SaveHistoryJob {
       + `to ${moment(to).format('l LT')}`);
     if (isEmpty(from)) return [];
     if (moment(from).isAfter(moment(to))) return [];
-    let earliestEventId;
+    let earliestEventId = 0;
     let totalEvents = [];
     while (
-      earliestEventId === undefined
-      || moment(totalEvents[totalEvents.length - 1].created_at).isAfter(moment(from))
+      earliestEventId === 0
+      || moment(last(totalEvents).created_at).isAfter(moment(from))
     ) {
       const historyEvents = await this.getLimitHistory(earliestEventId);
       if (isEmpty(historyEvents)) break;
-      if (earliestEventId.toString() === historyEvents[historyEvents.length - 1].id.toString()) break;
-      if (moment(historyEvents[historyEvents.length - 1].created_at).isBefore(moment(from))) {
+      if (earliestEventId.toString() === last(historyEvents).id.toString()) break;
+      if (moment(last(historyEvents).created_at).isBefore(moment(from))) {
         const evts = filter(historyEvents, e => moment(e.created_at).isAfter(moment(from)));
         totalEvents = totalEvents.concat(evts);
         break;
       }
       totalEvents = totalEvents.concat(historyEvents);
 
-      const earliestEvent = totalEvents[totalEvents.length - 1];
+      const earliestEvent = last(totalEvents);
       earliestEventId = earliestEvent.id;
     }
     this.logger(`Get history from ${moment(from).format('l LT')} `
@@ -406,7 +407,7 @@ class SaveHistoryJob {
       this.logger(`Finished at ${moment().format('l LT')}`);
       return result;
     } catch (err) {
-      this.logger(`Run FAILED at ${moment().format('l LT')} --- ${err}`);
+      this.logger(`Run FAILED at ${moment().format('l LT')} --- ${err.stack}`);
       return [];
     }
   }
