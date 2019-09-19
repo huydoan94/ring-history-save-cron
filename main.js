@@ -128,14 +128,15 @@ class SaveHistoryJob {
   async fetcher(...params) {
     const [firstParam, ...others] = params;
     let url = get(firstParam, 'url', '');
-    if (url.indexOf('api_version') === -1) {
+    const attachVersionAndToken = get(firstParam, 'attachVersionAndToken', true);
+    if (attachVersionAndToken && url.indexOf('api_version') === -1) {
       url = `${url}${url.indexOf('?') === -1 ? `?api_version=${API_VERSION}` : `&api_version=${API_VERSION}`}`;
     }
-    if (url.indexOf('auth_token') === -1) {
+    if (attachVersionAndToken && url.indexOf('auth_token') === -1) {
       const sessionToken = await this.getSession();
       url = `${url}${url.indexOf('?') === -1 ? `?auth_token=${sessionToken}` : `&auth_token=${sessionToken}`}`;
     }
-    const modParams = [{ ...firstParam, url }, ...others];
+    const modParams = [{ ...firstParam, url, attachVersionAndToken: undefined }, ...others];
     return promiseFetchWithRetryMechanism(axios, ...modParams).catch((err) => {
       if (get(err, 'response.status') === 401) {
         return this.getSession(true).then(() => this.fetcher(...params));
@@ -250,6 +251,7 @@ class SaveHistoryJob {
         url: videoStreamByteUrl,
         method: 'GET',
         responseType: 'stream',
+        attachVersionAndToken: false,
       }).then((response) => {
         let timeout;
         const file = fs.createWriteStream(dest, { flag: 'w' });
@@ -281,11 +283,11 @@ class SaveHistoryJob {
               this.logger(`Deleted file ${fileName} in ${dirPath}`);
             }
           });
-          this.logger(`Save file ${fileName} to ${dirPath} FAIL --- ${err}`);
+          this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
           reject(err);
         });
       }).catch((err) => {
-        this.logger(`Save file ${fileName} to ${dirPath} FAIL --- ${err}`);
+        this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
         reject(err);
       });
     });
