@@ -218,7 +218,7 @@ class SaveHistoryJob {
     ) {
       const historyEvents = await this.getLimitHistory(earliestEventId);
       if (isEmpty(historyEvents)) break;
-      if (earliestEventId === historyEvents[historyEvents.length - 1].id) break;
+      if (earliestEventId.toString() === historyEvents[historyEvents.length - 1].id.toString()) break;
       if (moment(historyEvents[historyEvents.length - 1].created_at).isBefore(moment(from))) {
         const evts = filter(historyEvents, e => moment(e.created_at).isAfter(moment(from)));
         totalEvents = totalEvents.concat(evts);
@@ -457,14 +457,17 @@ class SaveHistoryJob {
     const downloadedEvent = filter(sorted, e => e.isDownloaded);
 
     failedEvents.forEach((f) => {
-      if (oldFailedEvents.findIndex(o => o.id === f.id) === -1) {
+      if (oldFailedEvents.findIndex(o => o.id.toString() === f.id.toString()) === -1) {
         oldFailedEvents.push(f);
       }
     });
-    const newFailedEvents = filter(oldFailedEvents, o => downloadedEvent.findIndex(d => d.id === o.id) === -1);
+    const newFailedEvents = filter(
+      oldFailedEvents,
+      o => downloadedEvent.findIndex(d => d.id.toString() === o.id.toString()) === -1,
+    );
 
     downloadPool.forEach((d) => {
-      if (traversedEventIDs.findIndex(id => id === d.id) === -1) {
+      if (traversedEventIDs.findIndex(id => id.toString() === d.id.toString()) === -1) {
         traversedEventIDs.push(d.id);
       }
     });
