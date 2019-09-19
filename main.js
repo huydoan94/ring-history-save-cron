@@ -11,7 +11,7 @@ const filter = require('lodash/filter');
 const map = require('lodash/map');
 const reduce = require('lodash/reduce');
 const every = require('lodash/every');
-const forEach = require('lodash/forEach');
+const sortBy = require('lodash/sortBy');
 const uniq = require('lodash/uniq');
 const isNil = require('lodash/isNil');
 const isEmpty = require('lodash/isEmpty');
@@ -45,29 +45,40 @@ async function promiseAllWithLimit(callers, maxPromise = 5, stopOnError = true) 
     let currentInPool = 0;
     let isFailed = false;
     const results = [];
+    const resolveResults = (data) => {
+      if (every(data, r => r.data === null)) {
+        reject(new Error('Promise failed !!!'));
+      }
+      const sorted = sortBy(data, r => r.index);
+      const sortedResults = map(sorted, s => s.data);
+      resolve(sortedResults);
+    };
     const next = () => {
       if (isFailed) return;
       if (currentIndex >= endIndex && currentInPool <= 0) {
-        resolve(results);
+        resolveResults(results);
         return;
       }
       if (currentIndex >= endIndex) return;
 
       currentIndex += 1;
       currentInPool += 1;
-      callers[currentIndex]().then((res) => {
-        results.concat(res);
-        currentInPool -= 1;
-        next();
-      }).catch((err) => {
-        if (stopOnError) {
-          isFailed = true;
-          reject(err);
-          return;
-        }
-        currentInPool -= 1;
-        next();
-      });
+      ((innerIndex) => {
+        callers[innerIndex]().then((res) => {
+          results.push({ index: innerIndex, data: res });
+          currentInPool -= 1;
+          next();
+        }).catch((err) => {
+          if (stopOnError) {
+            isFailed = true;
+            reject(err);
+            return;
+          }
+          results.push({ index: innerIndex, data: null });
+          currentInPool -= 1;
+          next();
+        });
+      })(currentIndex);
     };
 
     for (let i = 0; i < maxPromise; i += 1) {
@@ -78,17 +89,8 @@ async function promiseAllWithLimit(callers, maxPromise = 5, stopOnError = true) 
 
 async function promiseMap(origArr, it) {
   if (isNil(origArr) || origArr.length === 0) return [];
-  return new Promise((resolve, reject) => {
-    let count = 0;
-    const results = [];
-    forEach(origArr, async (...params) => {
-      results.push(await it(...params).catch(err => reject(err)));
-      count += 1;
-      if (count === origArr.length) {
-        resolve(results);
-      }
-    });
-  });
+  const iteratees = map(origArr, (...params) => () => it(...[...params]));
+  return promiseAllWithLimit(iteratees, 20);
 }
 
 class SaveHistoryJob {
@@ -210,7 +212,7 @@ class SaveHistoryJob {
 
       if (fs.existsSync(dest)) {
         this.logger(`${fileName} in ${dirPath} exist. Skipping ...`);
-        resolve();
+        resolve(true);
         return;
       }
 
@@ -241,7 +243,7 @@ class SaveHistoryJob {
         response.data.on('end', () => {
           clearTimeout(timeout);
           this.logger(`Save file ${fileName} to ${dirPath} SUCCESSFUL`);
-          file.close(resolve);
+          file.close(() => resolve(true));
         });
         response.data.on('error', (err) => {
           clearTimeout(timeout);
@@ -331,7 +333,7 @@ class SaveHistoryJob {
         isReady: !isEmpty(videoStreamByteUrl),
         isFailed: false,
         isDownloaded: false,
-        dir: `./${dirPath}`,
+        dir: `${__dirname}/${dirPath}`,
         dirPath,
       };
     });
@@ -429,7 +431,7 @@ class SaveHistoryJob {
 
   async readMeta() {
     return new Promise((resolve, reject) => {
-      fs.readFile('./.meta', 'utf-8', (err, data) => {
+      fs.readFile(`${__dirname}/.meta`, 'utf-8', (err, data) => {
         if (err) {
           if (err.code === 'ENOENT') {
             resolve({});
@@ -450,7 +452,7 @@ class SaveHistoryJob {
 
   async writeMeta(data) {
     return new Promise((resolve, reject) => {
-      fs.writeFile('./.meta', JSONBigInt.stringify(data, null, 2), (err) => {
+      fs.writeFile(`${__dirname}/.meta`, JSONBigInt.stringify(data, null, 2), (err) => {
         if (err) {
           reject(err);
           return;
@@ -560,7 +562,7 @@ class SaveHistoryJob {
   username = process.argv[usernameParam + 1];
   password = process.argv[passwordParam + 1];
 
-  const logFile = fs.createWriteStream('./output.log', { flags: 'a' });
+  const logFile = fs.createWriteStream(`${__dirname}/output.log`, { flags: 'a' });
   const procStdOut = process.stdout;
   console.log = (message) => {
     logFile.write(`${util.format(message)}\n`);
