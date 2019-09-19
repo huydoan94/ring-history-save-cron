@@ -111,7 +111,7 @@ class SaveHistoryJob {
   async fetcher(...params) {
     return promiseFetchWithRetryMechanism(axios, ...params).catch((err) => {
       if (get(err, 'response.status') === 401) {
-        return this.getSession(true);
+        return this.getSession(true).then(() => this.fetcher(...params));
       }
       throw err;
     });
