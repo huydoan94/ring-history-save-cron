@@ -12,6 +12,7 @@ const map = require('lodash/map');
 const reduce = require('lodash/reduce');
 const every = require('lodash/every');
 const forEach = require('lodash/forEach');
+const uniq = require('lodash/uniq');
 const isNil = require('lodash/isNil');
 const isEmpty = require('lodash/isEmpty');
 
@@ -471,7 +472,7 @@ class SaveHistoryJob {
       lastestEvent,
       lastestEventTime: lastestEvent.created_at,
       failedEvents: newFailedEvents,
-      traversedEventIds: traversedEventIDs,
+      traversedEventIds: uniq(traversedEventIDs),
     };
   }
 
