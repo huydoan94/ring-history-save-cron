@@ -203,7 +203,9 @@ class SaveHistoryJob {
   // --- VIDEO STREAM PROCESS PART ---- //
 
   async saveByteStreamVideo({
-    id, createdAt, type, dir, videoStreamByteUrl, dirPath,
+    id, createdAt, type,
+    videoStreamByteUrl,
+    dir, dirPath,
   }) {
     return new Promise((resolve, reject) => {
       const extension = videoStreamByteUrl.match(/\.[0-9a-z]+?(?=\?)/i)[0];
