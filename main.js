@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-/* eslint-disable no-await-in-loop */
 const cron = require('node-cron');
 const express = require('express');
 const fs = require('fs');
@@ -461,9 +459,13 @@ class SaveHistoryJob {
     });
     let lastestEvent = {};
     if (!isEmpty(sorted)) {
-      lastestEvent = moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))
-        ? sorted[0]
-        : oldMeta.lastestEvent;
+      if (isEmpty(oldMeta.lastestEventTime)) {
+        lastestEvent = sorted[0];
+      } else if (moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))) {
+        lastestEvent = sorted[0];
+      } else {
+        lastestEvent = oldMeta.lastestEvent;
+      }
     }
     return {
       lastestEvent,

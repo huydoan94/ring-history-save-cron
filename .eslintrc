@@ -8,6 +8,9 @@
     "import/prefer-default-export": 0,
     "class-methods-use-this": [0],
     "max-len": [2, {"code": 120}],
-    "no-negated-condition": 0
+    "no-negated-condition": 0,
+    "prefer-destructuring": [0],
+    "no-await-in-loop": [0],
+    "no-console": [0]
   }
 }
