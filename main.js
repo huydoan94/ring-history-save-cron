@@ -410,11 +410,12 @@ class SaveHistoryJob {
   async run(from, to) {
     this.logger(`Running at ${moment().format('l LT')}`);
     const parsedFrom = isNil(from) || !moment(from).isValid() ? null : moment(from);
+    const parsedTo = isNil(to) || !moment(to).isValid() ? null : moment(to).endOf('day');
     try {
       await this.login();
       await this.getSession();
       const result = await this.downloadHistoryVideos(
-        await this.getHistory(parsedFrom, moment(to)),
+        await this.getHistory(parsedFrom, moment(parsedTo)),
       );
       this.logger(`Finished at ${moment().format('l LT')}`);
       return result;
