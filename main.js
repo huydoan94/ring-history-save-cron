@@ -126,7 +126,17 @@ class SaveHistoryJob {
   }
 
   async fetcher(...params) {
-    return promiseFetchWithRetryMechanism(axios, ...params).catch((err) => {
+    const [firstParam, ...others] = params;
+    let url = get(firstParam, 'url', '');
+    if (url.indexOf('api_version') === -1) {
+      url = `${url}${url.indexOf('?') === -1 ? `?api_version=${API_VERSION}` : `&api_version=${API_VERSION}`}`;
+    }
+    if (url.indexOf('auth_token') === -1) {
+      const sessionToken = await this.getSession();
+      url = `${url}${url.indexOf('?') === -1 ? `?auth_token=${sessionToken}` : `&auth_token=${sessionToken}`}`;
+    }
+    const modParams = [{ ...firstParam, url }, ...others];
+    return promiseFetchWithRetryMechanism(axios, ...modParams).catch((err) => {
       if (get(err, 'response.status') === 401) {
         return this.getSession(true).then(() => this.fetcher(...params));
       }
@@ -323,8 +333,7 @@ class SaveHistoryJob {
   async triggerServerRender(id) {
     this.logger(`Triggering server render for ${id}`);
     return this.fetcher({
-      url: `https://api.ring.com/clients_api/dings/${id}/share/download`
-        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`,
+      url: `https://api.ring.com/clients_api/dings/${id}/share/download`,
       method: 'GET',
     }).then((res) => {
       this.logger(`Trigger server render for ${id} successful`);
@@ -339,8 +348,7 @@ class SaveHistoryJob {
     this.logger('Start downloading history videos');
     let downloadPool = await promiseMap(history, async (h) => {
       const downloadUrl = `https://api.ring.com/clients_api/dings/${h.id}/share/download_status`
-        + '?disable_redirect=true'
-        + `&api_version=${API_VERSION}&auth_token=${await this.getSession()}`;
+        + '?disable_redirect=true';
       const videoStreamByteUrl = await this.getVideoStreamByteUrl(downloadUrl);
       const dirPath = get(h, 'doorbot.description', 'Unnamed Device');
       return {
@@ -397,8 +405,7 @@ class SaveHistoryJob {
   async getLimitHistory(earliestEventId, limit = 50, remain = 5) {
     return this.fetcher({
       url: 'https://api.ring.com/clients_api/doorbots/history'
-        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`
-        + `&limit=${limit}${isNil(earliestEventId) ? '' : `&older_than=${earliestEventId}`}`,
+        + `?limit=${limit}${isNil(earliestEventId) ? '' : `&older_than=${earliestEventId}`}`,
       method: 'GET',
       transformResponse: [data => JSONBigInt.parse(data)],
     }).then((res) => {
