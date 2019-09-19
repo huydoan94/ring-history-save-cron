@@ -259,7 +259,7 @@ class SaveHistoryJob {
     });
   }
 
-  async completeDownloadPool(downloadPools, remain = 10) {
+  async updateDownloadPool(downloadPools, remain = 10) {
     this.logger('Updating download pool');
     return promiseMap(downloadPools, async (p) => {
       if (p.isFailed || p.isReady) return p;
@@ -284,7 +284,7 @@ class SaveHistoryJob {
           return { ...r, isFailed: true };
         });
       }
-      return sleep(3000).then(() => this.completeDownloadPool(downloadPools, remain - 1));
+      return sleep(3000).then(() => this.updateDownloadPool(downloadPools, remain - 1));
     });
   }
 
@@ -374,7 +374,7 @@ class SaveHistoryJob {
       p => (p.isReady ? () => Promise.resolve() : () => this.triggerServerRender(p.id)),
     ));
 
-    downloadPool = await this.completeDownloadPool(downloadPool);
+    downloadPool = await this.updateDownloadPool(downloadPool);
 
     const dirs = reduce(downloadPool, (acc, d) => {
       if (acc.indexOf(d.dir) !== -1) return acc;
