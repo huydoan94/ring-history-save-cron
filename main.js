@@ -26,9 +26,9 @@ async function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
-async function withRetryMechanism(caller, ...params) {
+async function promiseFetchWithRetryMechanism(fetcher, ...params) {
   const retries = 5;
-  const retryFunc = remain => caller(...params).catch((err) => {
+  const retryFunc = remain => fetcher(...params).catch((err) => {
     if (remain === 0 || get(err, 'response.status') === 401) {
       throw err;
     }
@@ -100,9 +100,33 @@ class SaveHistoryJob {
     this.getSession.bind(this);
   }
 
+  // --------- HELPERS PART ---------- //
+
   logger(message) {
     console.log(`${moment().format()}: ${message}`);
   }
+
+  async fetcher(...params) {
+    return promiseFetchWithRetryMechanism(axios, ...params).catch((err) => {
+      if (get(err, 'response.status') === 401) {
+        return this.getSession(true);
+      }
+      throw err;
+    });
+  }
+
+  async createDirs(dirs) {
+    return reduce(dirs, (acc, d) => acc.then(() => new Promise((resolve, reject) => {
+      fs.mkdir(d, '0777', (err) => {
+        if (err) {
+          if (err.code === 'EEXIST') resolve();
+          else reject(err);
+        } else resolve();
+      });
+    })), Promise.resolve());
+  }
+
+  // ---- SESSION AND TOKEN PART ----- //
 
   async login(skipCurrentToken = false) {
     if (!skipCurrentToken && !isEmpty(this.authToken)) {
@@ -118,7 +142,7 @@ class SaveHistoryJob {
       client_id: 'ring_official_android',
     };
 
-    return withRetryMechanism(axios, {
+    return promiseFetchWithRetryMechanism(axios, {
       url: 'https://oauth.ring.com/oauth/token',
       method: 'POST',
       data: reqBody,
@@ -152,7 +176,7 @@ class SaveHistoryJob {
       },
     };
 
-    return withRetryMechanism(axios, {
+    return promiseFetchWithRetryMechanism(axios, {
       url: `https://api.ring.com/clients_api/session?api_version=${API_VERSION}`,
       method: 'POST',
       data: reqBody,
@@ -174,119 +198,7 @@ class SaveHistoryJob {
     });
   }
 
-  async fetcher(...params) {
-    return withRetryMechanism(axios, ...params).catch((err) => {
-      if (get(err, 'response.status') === 401) {
-        return this.getSession(true);
-      }
-      throw err;
-    });
-  }
-
-  async createDirs(dirs) {
-    return reduce(dirs, (acc, d) => acc.then(() => new Promise((resolve, reject) => {
-      fs.mkdir(d, '0777', (err) => {
-        if (err) {
-          if (err.code === 'EEXIST') resolve();
-          else reject(err);
-        } else resolve();
-      });
-    })), Promise.resolve());
-  }
-
-  async getLimitHistory(earliestEventId, limit = 50) {
-    return this.fetcher({
-      url: 'https://api.ring.com/clients_api/doorbots/history'
-        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`
-        + `&limit=${limit}${isNil(earliestEventId) ? '' : `&older_than=${earliestEventId}`}`,
-      method: 'GET',
-      transformResponse: [data => JSONBigInt.parse(data)],
-    }).then(res => get(res, 'data', [])).catch((err) => {
-      throw err;
-    });
-  }
-
-  async getHistory(from, to) {
-    this.logger(`Geting history from ${moment(from).format('l LT')} `
-      + `to ${moment(to).format('l LT')}`);
-    if (isEmpty(from)) return [];
-    if (moment(from).isAfter(moment(to))) return [];
-    let earliestEventId = 0;
-    let totalEvents = [];
-    while (
-      earliestEventId === 0
-      || moment(last(totalEvents).created_at).isAfter(moment(from))
-    ) {
-      const historyEvents = await this.getLimitHistory(earliestEventId);
-      if (isEmpty(historyEvents)) break;
-      if (earliestEventId.toString() === last(historyEvents).id.toString()) break;
-      if (moment(last(historyEvents).created_at).isBefore(moment(from))) {
-        const evts = filter(historyEvents, e => moment(e.created_at).isAfter(moment(from)));
-        totalEvents = totalEvents.concat(evts);
-        break;
-      }
-      totalEvents = totalEvents.concat(historyEvents);
-
-      const earliestEvent = last(totalEvents);
-      earliestEventId = earliestEvent.id;
-    }
-    this.logger(`Get history from ${moment(from).format('l LT')} `
-      + `to ${moment(to).format('l LT')} sucessful`);
-    return filter(totalEvents, evt => moment(evt.created_at).isBefore(moment(to)));
-  }
-
-  async triggerServerRender(id) {
-    this.logger(`Triggering server render for ${id}`);
-    return this.fetcher({
-      url: `https://api.ring.com/clients_api/dings/${id}/share/download`
-        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`,
-      method: 'GET',
-    }).then((res) => {
-      this.logger(`Trigger server render for ${id} successful`);
-      return get(res, 'data');
-    }).catch((err) => {
-      this.logger(`Trigger server render for ${id} FAIL`);
-      throw err;
-    });
-  }
-
-  async getVideoStreamByteUrl(downloadUrl) {
-    return this.fetcher({
-      url: downloadUrl,
-      method: 'GET',
-    }).then(res => get(res, 'data.url')).catch((err) => {
-      throw err;
-    });
-  }
-
-  async updateDownloadPool(downloadPools, remain = 10) {
-    this.logger('Updating download pool');
-    return promiseMap(downloadPools, async (p) => {
-      if (p.isFailed || p.isReady) return p;
-
-      let isFailed = false;
-      const videoStreamByteUrl = await this.getVideoStreamByteUrl(p.downloadUrl).catch(() => {
-        isFailed = true;
-      });
-      return {
-        ...p,
-        videoStreamByteUrl,
-        isReady: !isEmpty(videoStreamByteUrl) && !isFailed,
-        isFailed,
-      };
-    }).then((res) => {
-      if (every(res, r => r.isReady || r.isFailed)) {
-        return res;
-      }
-      if (remain === 0) {
-        return res.map((r) => {
-          if (r.isReady || r.isFailed) return r;
-          return { ...r, isFailed: true };
-        });
-      }
-      return sleep(3000).then(() => this.updateDownloadPool(downloadPools, remain - 1));
-    });
-  }
+  // --- VIDEO STREAM PROCESS PART ---- //
 
   async saveByteStreamVideo({
     id, createdAt, type, dir, videoStreamByteUrl, dirPath,
@@ -348,12 +260,66 @@ class SaveHistoryJob {
     });
   }
 
+
+  async getVideoStreamByteUrl(downloadUrl) {
+    return this.fetcher({
+      url: downloadUrl,
+      method: 'GET',
+    }).then(res => get(res, 'data.url')).catch((err) => {
+      throw err;
+    });
+  }
+
+  async updateDownloadPool(downloadPools, remain = 10) {
+    this.logger('Updating download pool');
+    return promiseMap(downloadPools, async (p) => {
+      if (p.isFailed || p.isReady) return p;
+
+      let isFailed = false;
+      const videoStreamByteUrl = await this.getVideoStreamByteUrl(p.downloadUrl).catch(() => {
+        isFailed = true;
+      });
+      return {
+        ...p,
+        videoStreamByteUrl,
+        isReady: !isEmpty(videoStreamByteUrl) && !isFailed,
+        isFailed,
+      };
+    }).then((res) => {
+      if (every(res, r => r.isReady || r.isFailed)) {
+        return res;
+      }
+      if (remain === 0) {
+        return res.map((r) => {
+          if (r.isReady || r.isFailed) return r;
+          return { ...r, isFailed: true };
+        });
+      }
+      return sleep(3000).then(() => this.updateDownloadPool(downloadPools, remain - 1));
+    });
+  }
+
+  async triggerServerRender(id) {
+    this.logger(`Triggering server render for ${id}`);
+    return this.fetcher({
+      url: `https://api.ring.com/clients_api/dings/${id}/share/download`
+        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`,
+      method: 'GET',
+    }).then((res) => {
+      this.logger(`Trigger server render for ${id} successful`);
+      return get(res, 'data');
+    }).catch((err) => {
+      this.logger(`Trigger server render for ${id} FAIL`);
+      throw err;
+    });
+  }
+
   async downloadHistoryVideos(history) {
     this.logger('Start downloading history videos');
     let downloadPool = await promiseMap(history, async (h) => {
       const downloadUrl = `https://api.ring.com/clients_api/dings/${h.id}/share/download_status`
-      + '?disable_redirect=true'
-      + `&api_version=${API_VERSION}&auth_token=${await this.getSession()}`;
+        + '?disable_redirect=true'
+        + `&api_version=${API_VERSION}&auth_token=${await this.getSession()}`;
       const videoStreamByteUrl = await this.getVideoStreamByteUrl(downloadUrl);
       const dirPath = get(h, 'doorbot.description', 'Unnamed Device');
       return {
@@ -396,6 +362,51 @@ class SaveHistoryJob {
     return downloadPool;
   }
 
+  // --------- HISTORY PART ---------- //
+
+  async getLimitHistory(earliestEventId, limit = 50) {
+    return this.fetcher({
+      url: 'https://api.ring.com/clients_api/doorbots/history'
+        + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`
+        + `&limit=${limit}${isNil(earliestEventId) ? '' : `&older_than=${earliestEventId}`}`,
+      method: 'GET',
+      transformResponse: [data => JSONBigInt.parse(data)],
+    }).then(res => get(res, 'data', [])).catch((err) => {
+      throw err;
+    });
+  }
+
+  async getHistory(from, to) {
+    this.logger(`Geting history from ${moment(from).format('l LT')} `
+      + `to ${moment(to).format('l LT')}`);
+    if (isEmpty(from)) return [];
+    if (moment(from).isAfter(moment(to))) return [];
+    let earliestEventId = 0;
+    let totalEvents = [];
+    while (
+      earliestEventId === 0
+      || moment(last(totalEvents).created_at).isAfter(moment(from))
+    ) {
+      const historyEvents = await this.getLimitHistory(earliestEventId);
+      if (isEmpty(historyEvents)) break;
+      if (earliestEventId.toString() === last(historyEvents).id.toString()) break;
+      if (moment(last(historyEvents).created_at).isBefore(moment(from))) {
+        const evts = filter(historyEvents, e => moment(e.created_at).isAfter(moment(from)));
+        totalEvents = totalEvents.concat(evts);
+        break;
+      }
+      totalEvents = totalEvents.concat(historyEvents);
+
+      const earliestEvent = last(totalEvents);
+      earliestEventId = earliestEvent.id;
+    }
+    this.logger(`Get history from ${moment(from).format('l LT')} `
+      + `to ${moment(to).format('l LT')} sucessful`);
+    return filter(totalEvents, evt => moment(evt.created_at).isBefore(moment(to)));
+  }
+
+  // -------- NORMAL RUN PART -------- //
+
   async run(from, to) {
     this.logger(`Running at ${moment().format('l LT')}`);
     const parsedFrom = isNil(from) || !moment(from).isValid() ? null : moment(from);
@@ -412,6 +423,8 @@ class SaveHistoryJob {
       return [];
     }
   }
+
+  // ----------- CRON PART ----------- //
 
   async readMeta() {
     return new Promise((resolve, reject) => {
