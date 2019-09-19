@@ -87,9 +87,9 @@ async function promiseAllWithLimit(callers, maxPromise = 5, stopOnError = true) 
   });
 }
 
-async function promiseMap(origArr, it) {
-  if (isNil(origArr) || origArr.length === 0) return [];
-  const iteratees = map(origArr, (...params) => () => it(...[...params]));
+async function promiseMap(collection, iteratee) {
+  if (isNil(collection)) return [];
+  const iteratees = map(collection, (...params) => () => iteratee(...params));
   return promiseAllWithLimit(iteratees, 20);
 }
 
