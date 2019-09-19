@@ -11,6 +11,7 @@ const filter = require('lodash/filter');
 const map = require('lodash/map');
 const reduce = require('lodash/reduce');
 const every = require('lodash/every');
+const some = require('lodash/some');
 const sortBy = require('lodash/sortBy');
 const uniq = require('lodash/uniq');
 const forEach = require('lodash/forEach');
@@ -393,14 +394,23 @@ class SaveHistoryJob {
 
   // --------- HISTORY PART ---------- //
 
-  async getLimitHistory(earliestEventId, limit = 50) {
+  async getLimitHistory(earliestEventId, limit = 50, remain = 5) {
     return this.fetcher({
       url: 'https://api.ring.com/clients_api/doorbots/history'
         + `?api_version=${API_VERSION}&auth_token=${await this.getSession()}`
         + `&limit=${limit}${isNil(earliestEventId) ? '' : `&older_than=${earliestEventId}`}`,
       method: 'GET',
       transformResponse: [data => JSONBigInt.parse(data)],
-    }).then(res => get(res, 'data', [])).catch((err) => {
+    }).then((res) => {
+      const data = get(res, 'data', []);
+      if (remain === 0) {
+        return data;
+      }
+      if (some(data, d => get(d, 'recording.status') !== 'ready')) {
+        return sleep(5000).then(() => this.getLimitHistory(earliestEventId, limit, remain - 1));
+      }
+      return data;
+    }).catch((err) => {
       throw err;
     });
   }
