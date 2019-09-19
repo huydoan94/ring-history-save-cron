@@ -3,7 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const crypto = require('crypto');
 const util = require('util');
-const axios = require('axios');
+const libaxios = require('axios');
 const JSONBigInt = require('json-bigint');
 const moment = require('moment');
 const get = require('lodash/get');
@@ -22,6 +22,21 @@ let username;
 let password;
 
 const API_VERSION = 11;
+
+async function axios(...params) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timeout !!!'));
+    }, 60000);
+    libaxios(...params).then((res) => {
+      clearTimeout(timeout);
+      resolve(res);
+    }).catch((err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
+}
 
 async function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
