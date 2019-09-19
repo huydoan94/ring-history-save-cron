@@ -41,7 +41,7 @@ async function promiseAllWithLimit(callers, maxPromise = 5, stopOnError = true) 
   if (isEmpty(callers)) return [];
   return new Promise((resolve, reject) => {
     const endIndex = callers.length - 1;
-    let currentIndex = 0;
+    let currentIndex = -1;
     let currentInPool = 0;
     let isFailed = false;
     const results = [];
@@ -289,7 +289,7 @@ class SaveHistoryJob {
   }
 
   async saveByteStreamVideo({
-    id, createdAt, type, dir, videoStreamByteUrl,
+    id, createdAt, type, dir, videoStreamByteUrl, dirPath,
   }) {
     return new Promise((resolve, reject) => {
       const extension = videoStreamByteUrl.match(/\.[0-9a-z]+?(?=\?)/i)[0];
@@ -297,12 +297,12 @@ class SaveHistoryJob {
       const dest = `${dir}/${fileName}`;
 
       if (fs.existsSync(dest)) {
-        this.logger(`${fileName} in ${dir} exist. Skipping ...`);
+        this.logger(`${fileName} in ${dirPath} exist. Skipping ...`);
         resolve();
         return;
       }
 
-      this.logger(`Saving event ${id} to file ${fileName} in ${dir}`);
+      this.logger(`Saving event ${id} to file ${fileName} in ${dirPath}`);
       this.fetcher({
         url: videoStreamByteUrl,
         method: 'GET',
@@ -315,7 +315,7 @@ class SaveHistoryJob {
           timeout = setTimeout(() => {
             fs.unlink(dest, () => (err2) => {
               if (!err2) {
-                this.logger(`Deleted file ${fileName}`);
+                this.logger(`Deleted file ${fileName} in ${dirPath}`);
               }
             });
             reject(new Error(`Timeout on ${videoStreamByteUrl}`));
@@ -328,21 +328,21 @@ class SaveHistoryJob {
         });
         response.data.on('end', () => {
           clearTimeout(timeout);
-          this.logger(`Save file ${fileName} SUCCESSFUL`);
+          this.logger(`Save file ${fileName} to ${dirPath} SUCCESSFUL`);
           file.close(resolve);
         });
         response.data.on('error', (err) => {
           clearTimeout(timeout);
           fs.unlink(dest, (err2) => {
             if (!err2) {
-              this.logger(`Deleted file ${fileName}`);
+              this.logger(`Deleted file ${fileName} in ${dirPath}`);
             }
           });
-          this.logger(`Save file ${fileName} FAIL`);
+          this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
           reject(err);
         });
       }).catch((err) => {
-        this.logger(`Save file ${fileName} FAIL`);
+        this.logger(`Save file ${fileName} to ${dirPath} FAIL`);
         reject(err);
       });
     });
@@ -355,9 +355,9 @@ class SaveHistoryJob {
       + '?disable_redirect=true'
       + `&api_version=${API_VERSION}&auth_token=${await this.getSession()}`;
       const videoStreamByteUrl = await this.getVideoStreamByteUrl(downloadUrl);
+      const dirPath = get(h, 'doorbot.description', 'Unnamed Device');
       return {
         ...h,
-        id: h.id,
         createdAt: h.created_at,
         type: h.kind,
         downloadUrl,
@@ -365,7 +365,8 @@ class SaveHistoryJob {
         isReady: !isEmpty(videoStreamByteUrl),
         isFailed: false,
         isDownloaded: false,
-        dir: `./${get(h, 'doorbot.description', 'Unnamed Device')}`,
+        dir: `./${dirPath}`,
+        dirPath,
       };
     });
 
