@@ -13,6 +13,7 @@ const reduce = require('lodash/reduce');
 const every = require('lodash/every');
 const sortBy = require('lodash/sortBy');
 const uniq = require('lodash/uniq');
+const forEach = require('lodash/forEach');
 const isNil = require('lodash/isNil');
 const isEmpty = require('lodash/isEmpty');
 const last = require('lodash/last');
@@ -214,7 +215,7 @@ class SaveHistoryJob {
 
       if (fs.existsSync(dest)) {
         this.logger(`${fileName} in ${dirPath} exist. Skipping ...`);
-        resolve(true);
+        resolve(2);
         return;
       }
 
@@ -245,7 +246,7 @@ class SaveHistoryJob {
         response.data.on('end', () => {
           clearTimeout(timeout);
           this.logger(`Save file ${fileName} to ${dirPath} SUCCESSFUL`);
-          file.close(() => resolve(true));
+          file.close(() => resolve(1));
         });
         response.data.on('error', (err) => {
           clearTimeout(timeout);
@@ -335,6 +336,7 @@ class SaveHistoryJob {
         isReady: !isEmpty(videoStreamByteUrl),
         isFailed: false,
         isDownloaded: false,
+        isSkipped: false,
         dir: `${__dirname}/${dirPath}`,
         dirPath,
       };
@@ -355,10 +357,18 @@ class SaveHistoryJob {
 
     await promiseAllWithLimit(
       map(downloadPool, d => () => this.saveByteStreamVideo(d)
-        // eslint-disable-next-line no-param-reassign
-        .then((res) => { d.isDownloaded = true; return res; })
-        // eslint-disable-next-line no-param-reassign
-        .catch((err) => { d.isFailed = true; throw err; })),
+        .then((res) => {
+          // eslint-disable-next-line no-param-reassign
+          if (res === 1 || res === 2) { d.isDownloaded = true; }
+          // eslint-disable-next-line no-param-reassign
+          if (res === 2) { d.isSkipped = true; }
+          return res;
+        })
+        .catch((err) => {
+          // eslint-disable-next-line no-param-reassign
+          d.isFailed = true;
+          throw err;
+        })),
       5, false,
     );
 
@@ -418,11 +428,25 @@ class SaveHistoryJob {
     try {
       await this.login();
       await this.getSession();
-      const result = await this.downloadHistoryVideos(
+      const processedEvents = await this.downloadHistoryVideos(
         await this.getHistory(parsedFrom, moment(parsedTo)),
       );
+      /* eslint-disable */
+      let ok = 0, fail = 0, skip = 0;
+      /* eslint-enable */
+      forEach(processedEvents, (pe) => {
+        if (pe.isSkipped) {
+          skip += 1;
+        } else if (pe.isDownloaded) {
+          ok += 1;
+        } else {
+          fail += 1;
+        }
+      });
+      // eslint-disable-next-line max-len
+      this.logger(`Result:\n\tTotal: ${processedEvents.length}\n\tDownloaded: ${ok}\n\tSkipped: ${skip}\n\tFailed: ${fail}`);
       this.logger(`Finished at ${moment().format('l LT')}`);
-      return result;
+      return processedEvents;
     } catch (err) {
       this.logger(`Run FAILED at ${moment().format('l LT')} --- ${err.stack}`);
       return [];
@@ -520,9 +544,11 @@ class SaveHistoryJob {
       this.logger(`Running job at ${moment().format('l LT')}`);
       isCronRunning = true;
       try {
+        let processedEvents = [];
         let meta = await this.readMeta();
         if (isEmpty(meta) || isEmpty(meta.lastestEventTime)) {
           const result = await this.run(moment().startOf('day'));
+          processedEvents = result;
           meta = this.createMetaData(meta, result);
         } else {
           let retryFailedEvents = [];
@@ -538,9 +564,25 @@ class SaveHistoryJob {
             );
           }
 
-          meta = this.createMetaData(meta, [...retryFailedEvents, ...newEvents]);
+          processedEvents = [...retryFailedEvents, ...newEvents];
+          meta = this.createMetaData(meta, processedEvents);
         }
+
         await this.writeMeta(meta);
+        /* eslint-disable */
+        let ok = 0, fail = 0, skip = 0;
+        /* eslint-enable */
+        forEach(processedEvents, (pe) => {
+          if (pe.isSkipped) {
+            skip += 1;
+          } else if (pe.isDownloaded) {
+            ok += 1;
+          } else {
+            fail += 1;
+          }
+        });
+        // eslint-disable-next-line max-len
+        this.logger(`Job result:\n\tTotal: ${processedEvents.length}\n\tDownloaded: ${ok}\n\tSkipped: ${skip}\n\tFailed: ${fail}`);
         this.logger(`Job run SUCCESS at ${moment().format('l LT')}`);
         isCronRunning = false;
       } catch (e) {
