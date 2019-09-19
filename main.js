@@ -486,14 +486,12 @@ class SaveHistoryJob {
         traversedEventIDs.push(d.id);
       }
     });
-    let lastestEvent = {};
+    let lastestEvent = isEmpty(oldMeta.lastestEvent) ? {} : oldMeta.lastestEvent;
     if (!isEmpty(sorted)) {
       if (isEmpty(oldMeta.lastestEventTime)) {
         lastestEvent = sorted[0];
       } else if (moment(oldMeta.lastestEventTime).isBefore(moment(sorted[0].created_at))) {
         lastestEvent = sorted[0];
-      } else {
-        lastestEvent = oldMeta.lastestEvent;
       }
     }
     return {
@@ -509,7 +507,6 @@ class SaveHistoryJob {
     let isFirstRun = true;
     const cronJob = async () => {
       if (isCronRunning) {
-        this.logger(`Skip running job at ${moment().format('l LT')}`);
         return;
       }
       if (isFirstRun) {
@@ -546,6 +543,7 @@ class SaveHistoryJob {
         isCronRunning = false;
       }
     };
+
     if (isFirstRun) cronJob();
     return cron.schedule('0 * * * * *', cronJob);
   }
