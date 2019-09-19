@@ -312,9 +312,13 @@ class SaveHistoryJob {
         const refreshTimeout = () => {
           if (timeout !== undefined) clearTimeout(timeout);
           timeout = setTimeout(() => {
-            fs.unlink(dest, () => {});
+            fs.unlink(dest, () => (err2) => {
+              if (!err2) {
+                this.logger(`Deleted file ${fileName}`);
+              }
+            });
             reject(new Error(`Timeout on ${videoStreamByteUrl}`));
-          }, 5000);
+          }, 10000);
         };
         refreshTimeout();
         response.data.pipe(file);
@@ -322,11 +326,17 @@ class SaveHistoryJob {
           refreshTimeout();
         });
         response.data.on('end', () => {
+          clearTimeout(timeout);
           this.logger(`Save file ${fileName} SUCCESSFUL`);
           file.close(resolve);
         });
         response.data.on('error', (err) => {
-          fs.unlink(dest, () => {});
+          clearTimeout(timeout);
+          fs.unlink(dest, (err2) => {
+            if (!err2) {
+              this.logger(`Deleted file ${fileName}`);
+            }
+          });
           this.logger(`Save file ${fileName} FAIL`);
           reject(err);
         });
@@ -478,10 +488,14 @@ class SaveHistoryJob {
 
   async runCron() {
     let isCronRunning = false;
-    return cron.schedule('0 * * * * *', async () => {
+    let isFirstRun = true;
+    const cronJob = async () => {
       if (isCronRunning) {
         this.logger(`Skip running job at ${moment().format('l LT')}`);
         return;
+      }
+      if (isFirstRun) {
+        isFirstRun = false;
       }
       this.logger(`Running job at ${moment().format('l LT')}`);
       isCronRunning = true;
@@ -498,7 +512,7 @@ class SaveHistoryJob {
 
           let newEvents = [];
           const lastestEvent = (await this.getLimitHistory(undefined, 1))[0];
-          if (lastestEvent.created_at !== meta.lastestEventTime) {
+          if (moment(lastestEvent.created_at).isAfter(meta.lastestEventTime)) {
             newEvents = await this.downloadHistoryVideos(
               await this.getHistory(meta.lastestEventTime),
             );
@@ -513,7 +527,9 @@ class SaveHistoryJob {
         this.logger(`Job run FAIL at ${moment().format('l LT')} --- ${e}`);
         isCronRunning = false;
       }
-    });
+    };
+    if (isFirstRun) cronJob();
+    return cron.schedule('0 * * * * *', cronJob);
   }
 }
 
