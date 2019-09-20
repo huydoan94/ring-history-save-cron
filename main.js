@@ -465,9 +465,7 @@ class SaveHistoryJob {
       const processedEvents = await this.downloadHistoryVideos(
         await this.getHistory(parsedFrom, moment(parsedTo)),
       );
-      /* eslint-disable */
       let ok = 0, fail = 0, skip = 0;
-      /* eslint-enable */
       forEach(processedEvents, (pe) => {
         if (pe.isSkipped) {
           skip += 1;
@@ -603,9 +601,7 @@ class SaveHistoryJob {
         }
 
         await this.writeMeta(meta);
-        /* eslint-disable */
         let ok = 0, fail = 0, skip = 0;
-        /* eslint-enable */
         forEach(processedEvents, (pe) => {
           if (pe.isSkipped) {
             skip += 1;
