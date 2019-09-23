@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 const util = require('util');
 const libaxios = require('axios');
@@ -113,6 +114,7 @@ class SaveHistoryJob {
     this.authToken = null;
     this.sessionToken = null;
     this.hardwareId = null;
+    this.metaPath = path.join(__dirname, '.meta.json');
 
     this.login.bind(this);
     this.getSession.bind(this);
@@ -252,7 +254,7 @@ class SaveHistoryJob {
     return new Promise((resolve, reject) => {
       const extension = videoStreamByteUrl.match(/\.[0-9a-z]+?(?=\?)/i)[0];
       const fileName = `${moment(createdAt).format('YYYY-MM-DD_HH-mm-ss')}_${type}${extension}`;
-      const dest = `${dir}/${fileName}`;
+      const dest = path.join(dir, fileName);
 
       if (fs.existsSync(dest)) {
         this.logger(`${fileName} in ${dirPath} exist. Skipping ...`);
@@ -376,7 +378,7 @@ class SaveHistoryJob {
         isFailed: false,
         isDownloaded: false,
         isSkipped: false,
-        dir: `${__dirname}/${dirPath}`,
+        dir: path.join(__dirname, dirPath),
         dirPath,
       };
     });
@@ -504,7 +506,7 @@ class SaveHistoryJob {
 
   async readMeta() {
     return new Promise((resolve, reject) => {
-      fs.readFile(`${__dirname}/.meta`, 'utf-8', (err, data) => {
+      fs.readFile(this.metaPath, 'utf-8', (err, data) => {
         if (err) {
           if (err.code === 'ENOENT') {
             resolve({});
@@ -530,7 +532,7 @@ class SaveHistoryJob {
           /("traversedEventIds": \[)([^\]]+)/,
           (_, a, b) => `${a}\n\t\t${b.replace(/\s+/g, ' ').replace(/((?:\S+\s){3}\S+)\s/g, '$1\n\t\t').trim()}\n\t`,
         );
-      fs.writeFile(`${__dirname}/.meta`, stringified, (err) => {
+      fs.writeFile(this.metaPath, stringified, (err) => {
         if (err) {
           reject(err);
           return;
@@ -648,6 +650,7 @@ class SaveHistoryJob {
 }
 
 (async () => {
+  const logFilePath = path.join(__dirname, 'log.txt');
   const usernameParam = process.argv.indexOf('--username');
   const passwordParam = process.argv.indexOf('--password');
   if (usernameParam === -1 || passwordParam === -1) {
@@ -658,7 +661,7 @@ class SaveHistoryJob {
   const username = process.argv[usernameParam + 1];
   const password = process.argv[passwordParam + 1];
 
-  const logFile = fs.createWriteStream(`${__dirname}/output.log`, { flags: 'a' });
+  const logFile = fs.createWriteStream(logFilePath, { flags: 'a' });
   const procStdOut = process.stdout;
   console.log = (message) => {
     logFile.write(`${util.format(message)}\n`);
