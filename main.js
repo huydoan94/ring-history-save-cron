@@ -526,7 +526,9 @@ class SaveHistoryJob {
 
   async writeMeta(data) {
     return new Promise((resolve, reject) => {
-      fs.writeFile(`${__dirname}/.meta`, JSONBigInt.stringify(data, null, 2), (err) => {
+      const stringified = JSONBigInt.stringify(data, null, 2)
+        .replace(/("traversedEventIds": \[)([^\]]+)/, (_, a, b) => a + b.replace(/\s+/g, ''));
+      fs.writeFile(`${__dirname}/.meta`, stringified, (err) => {
         if (err) {
           reject(err);
           return;
