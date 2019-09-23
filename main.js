@@ -318,7 +318,6 @@ class SaveHistoryJob {
   }
 
   async updateDownloadPool(downloadPools, remain = 10) {
-    this.logger('Updating download pool');
     return promiseMap(downloadPools, async (p) => {
       if (p.isFailed || p.isReady) return p;
 
