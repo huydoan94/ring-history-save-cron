@@ -121,7 +121,7 @@ class SaveHistoryJob {
   // --------- HELPERS PART ---------- //
 
   logger(message) {
-    console.log(`${moment().format()}: ${message}`);
+    console.log(`${moment().format('YYYY-MM-DD HH:mm:ss')}: ${message}`);
   }
 
   async getHardwareId() {
