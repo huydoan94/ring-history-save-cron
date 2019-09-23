@@ -13,14 +13,10 @@ const reduce = require('lodash/reduce');
 const every = require('lodash/every');
 const some = require('lodash/some');
 const sortBy = require('lodash/sortBy');
-const uniq = require('lodash/uniq');
 const forEach = require('lodash/forEach');
 const isNil = require('lodash/isNil');
 const isEmpty = require('lodash/isEmpty');
 const last = require('lodash/last');
-
-let username;
-let password;
 
 const API_VERSION = 11;
 
@@ -111,9 +107,12 @@ async function promiseMap(collection, iteratee) {
 }
 
 class SaveHistoryJob {
-  constructor() {
+  constructor(username, password) {
+    this.username = username;
+    this.password = password;
     this.authToken = null;
     this.sessionToken = null;
+    this.hardwareId = null;
 
     this.login.bind(this);
     this.getSession.bind(this);
@@ -123,6 +122,15 @@ class SaveHistoryJob {
 
   logger(message) {
     console.log(`${moment().format()}: ${message}`);
+  }
+
+  async getHardwareId() {
+    if (!isEmpty(this.hardwareId)) {
+      return this.hardwareId;
+    }
+    const meta = await this.readMeta();
+    this.hardwareId = get(meta, 'hardwareId', crypto.randomBytes(16).toString('hex'));
+    return this.hardwareId;
   }
 
   async fetcher(...params) {
@@ -136,9 +144,15 @@ class SaveHistoryJob {
       const sessionToken = await this.getSession();
       url = `${url}${url.indexOf('?') === -1 ? `?auth_token=${sessionToken}` : `&auth_token=${sessionToken}`}`;
     }
-    const modParams = [{ ...firstParam, url, attachVersionAndToken: undefined }, ...others];
+    let headers = get(firstParam, 'headers', {});
+    if (attachVersionAndToken) {
+      headers = { ...headers, hardware_id: await this.getHardwareId() };
+    }
+    const modParams = [{
+      ...firstParam, url, headers, attachVersionAndToken: undefined,
+    }, ...others];
     return promiseFetchWithRetryMechanism(axios, ...modParams).catch((err) => {
-      if (get(err, 'response.status') === 401) {
+      if (get(err, 'response.status') === 401 && attachVersionAndToken) {
         return this.getSession(true).then(() => this.fetcher(...params));
       }
       throw err;
@@ -165,8 +179,8 @@ class SaveHistoryJob {
 
     this.logger('Logging in');
     const reqBody = {
-      username,
-      password,
+      username: this.username,
+      password: this.password,
       grant_type: 'password',
       scope: 'client',
       client_id: 'ring_official_android',
@@ -198,7 +212,7 @@ class SaveHistoryJob {
     this.logger('Getting session token');
     const reqBody = {
       device: {
-        hardware_id: crypto.randomBytes(16).toString('hex'),
+        hardware_id: await this.getHardwareId(),
         metadata: {
           api_version: API_VERSION,
         },
@@ -465,6 +479,8 @@ class SaveHistoryJob {
       const processedEvents = await this.downloadHistoryVideos(
         await this.getHistory(parsedFrom, moment(parsedTo)),
       );
+      await this.writeMeta(this.createMetaData(await this.readMeta(), processedEvents));
+
       let ok = 0, fail = 0, skip = 0;
       forEach(processedEvents, (pe) => {
         if (pe.isSkipped) {
@@ -559,7 +575,8 @@ class SaveHistoryJob {
       lastestEvent,
       lastestEventTime: lastestEvent.created_at,
       failedEvents: newFailedEvents,
-      traversedEventIds: uniq(traversedEventIDs),
+      traversedEventIds: traversedEventIDs,
+      hardwareId: this.hardwareId,
     };
   }
 
@@ -630,11 +647,12 @@ class SaveHistoryJob {
   const usernameParam = process.argv.indexOf('--username');
   const passwordParam = process.argv.indexOf('--password');
   if (usernameParam === -1 || passwordParam === -1) {
+    console.log('Please input --username and/or --password');
     process.exit(1);
     return;
   }
-  username = process.argv[usernameParam + 1];
-  password = process.argv[passwordParam + 1];
+  const username = process.argv[usernameParam + 1];
+  const password = process.argv[passwordParam + 1];
 
   const logFile = fs.createWriteStream(`${__dirname}/output.log`, { flags: 'a' });
   const procStdOut = process.stdout;
@@ -643,7 +661,7 @@ class SaveHistoryJob {
     procStdOut.write(`${util.format(message)}\n`);
   };
 
-  const job = new SaveHistoryJob();
+  const job = new SaveHistoryJob(username, password);
   const isCron = process.argv.indexOf('--cron') !== -1;
   if (isCron) {
     job.runCron();
