@@ -529,7 +529,7 @@ class SaveHistoryJob {
       const stringified = JSONBigInt.stringify(data, null, 2)
         .replace(
           /("traversedEventIds": \[)([^\]]+)/,
-          (_, a, b) => a + b.replace(/\s+/g, ' ').replace(/((?:\S+\s){5}\S+)\s/g, '$1\n').trim(),
+          (_, a, b) => a + b.replace(/\s+/g, ' ').replace(/((?:\S+\s){3}\S+)\s/g, '$1\n\t\t').trim(),
         );
       fs.writeFile(`${__dirname}/.meta`, stringified, (err) => {
         if (err) {
