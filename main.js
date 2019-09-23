@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const nodeMachineId = require('node-machine-id');
 const util = require('util');
 const libaxios = require('axios');
 const JSONBigInt = require('json-bigint');
@@ -131,7 +131,7 @@ class SaveHistoryJob {
       return this.hardwareId;
     }
     const meta = await this.readMeta();
-    this.hardwareId = get(meta, 'hardwareId', crypto.randomBytes(16).toString('hex'));
+    this.hardwareId = get(meta, 'hardwareId', nodeMachineId.machineIdSync());
     return this.hardwareId;
   }
 

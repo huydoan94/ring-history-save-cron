@@ -17,6 +17,7 @@
     "lodash": "^4.17.15",
     "moment": "^2.24.0",
     "node-cron": "^2.0.3",
+    "node-machine-id": "^1.1.12",
     "ring-api": "^3.0.7"
   },
   "devDependencies": {
