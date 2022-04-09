@@ -9,7 +9,7 @@
     "fs": "0.0.1-security",
     "json-bigint": "^0.3.0",
     "lodash": "^4.17.15",
-    "moment": "^2.24.0",
+    "moment": "^2.29.2",
     "node-cron": "^2.0.3",
     "node-machine-id": "^1.1.12",
     "ring-api": "^3.0.7"
